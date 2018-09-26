@@ -2,10 +2,7 @@ package org.edx.mobile.base;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -52,8 +49,6 @@ public abstract class BaseWebViewFindCoursesActivity extends BaseFragmentActivit
     private static final String INSTANCE_COURSE_ID = "enrollCourseId";
     private static final String INSTANCE_EMAIL_OPT_IN = "enrollEmailOptIn";
 
-    private static final String ACTION_ENROLLED = "ACTION_ENROLLED_TO_COURSE";
-
     private EdxWebView webView;
     private ProgressBar progressWheel;
     private boolean isTaskInProgress = false;
@@ -83,7 +78,6 @@ public abstract class BaseWebViewFindCoursesActivity extends BaseFragmentActivit
         webView.getSettings().setDomStorageEnabled(true);
 
         setupWebView();
-        enableEnrollCallback();
 
         if (null != savedInstanceState) {
             lastClickEnrollCourseId = savedInstanceState.getString(INSTANCE_COURSE_ID);
@@ -101,12 +95,6 @@ public abstract class BaseWebViewFindCoursesActivity extends BaseFragmentActivit
     public void onPause() {
         super.onPause();
         webView.onPause();
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        disableEnrollCallback();
     }
 
     @Override
@@ -252,26 +240,6 @@ public abstract class BaseWebViewFindCoursesActivity extends BaseFragmentActivit
                         }
                     }
                 });
-    }
-
-    //Broadcast Receiver to notify all activities to finish if user logs out
-    private BroadcastReceiver courseEnrollReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            finish();
-        }
-    };
-
-    protected void enableEnrollCallback() {
-        // register for enroll click listener
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(ACTION_ENROLLED);
-        registerReceiver(courseEnrollReceiver, filter);
-    }
-
-    protected void disableEnrollCallback() {
-        // un-register enrollReceiver
-        unregisterReceiver(courseEnrollReceiver);
     }
 
     private void showEnrollErrorMessage(final String courseId, final boolean emailOptIn) {
