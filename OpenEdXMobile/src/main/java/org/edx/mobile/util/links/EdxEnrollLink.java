@@ -30,7 +30,7 @@ public class EdxEnrollLink {
         }
         {
             // The edx.org course catalog does not encode plus signs in the course_id parameter
-            // We encode them here before parsing the URI, to prevent conversion to space characters
+            // We encode them here before parsing the URI, to prevent conversion to space characthelperers
             // TODO: Remove this hack once it's fixed on the server: https://openedx.atlassian.net/browse/MA-1901
             uriStr = uriStr.replace("+", "%2B");
         }

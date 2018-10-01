@@ -5,64 +5,46 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.app.DialogFragment;
-import android.text.TextUtils;
 import android.view.View;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.widget.ProgressBar;
-import android.widget.Toast;
 
 import com.google.inject.Inject;
 
 import org.edx.mobile.R;
-import org.edx.mobile.course.CourseAPI;
-import org.edx.mobile.course.CourseService;
 import org.edx.mobile.http.HttpStatus;
 import org.edx.mobile.http.HttpStatusException;
 import org.edx.mobile.http.notifications.FullScreenErrorNotification;
 import org.edx.mobile.http.provider.OkHttpClientProvider;
 import org.edx.mobile.interfaces.WebViewStatusListener;
 import org.edx.mobile.model.api.EnrolledCoursesResponse;
-import org.edx.mobile.util.ResourceUtil;
 import org.edx.mobile.util.WebViewUtil;
-import org.edx.mobile.view.common.TaskProgressCallback;
+import org.edx.mobile.util.links.DefaultActionListener;
 import org.edx.mobile.view.custom.EdxWebView;
 import org.edx.mobile.view.custom.URLInterceptorWebViewClient;
-import org.edx.mobile.view.dialog.EnrollmentFailureDialogFragment;
-import org.edx.mobile.view.dialog.IDialogCallback;
-
-import java.util.HashMap;
-import java.util.Map;
 
 import okhttp3.MediaType;
 import okhttp3.ResponseBody;
 import retrofit2.Response;
 
 public abstract class BaseWebViewFindCoursesActivity extends BaseFragmentActivity
-        implements URLInterceptorWebViewClient.IActionListener, WebViewStatusListener {
+        implements WebViewStatusListener {
     private static final int LOG_IN_REQUEST_CODE = 42;
     private static final String INSTANCE_COURSE_ID = "enrollCourseId";
     private static final String INSTANCE_EMAIL_OPT_IN = "enrollEmailOptIn";
 
     private EdxWebView webView;
     private ProgressBar progressWheel;
-    private boolean isTaskInProgress = false;
     private String lastClickEnrollCourseId;
     private boolean lastClickEnrollEmailOptIn;
 
     private FullScreenErrorNotification errorNotification;
     private URLInterceptorWebViewClient client;
-
-    @Inject
-    private CourseService courseService;
-
-    @Inject
-    private CourseAPI courseApi;
+    private DefaultActionListener defaultActionListener;
 
     @Inject
     private OkHttpClientProvider okHttpClientProvider;
@@ -104,12 +86,34 @@ public abstract class BaseWebViewFindCoursesActivity extends BaseFragmentActivit
     }
 
     private void setupWebView() {
-        client = new URLInterceptorWebViewClient(this, webView);
+        defaultActionListener = new DefaultActionListener(this, progressWheel,
+                new DefaultActionListener.EnrollCallback() {
+                    @Override
+                    public void onResponse(@NonNull EnrolledCoursesResponse course) {
+
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Throwable error) {
+                    }
+
+                    @Override
+                    public void onUserNotLoggedIn(@NonNull String courseId, boolean emailOptIn) {
+                        lastClickEnrollCourseId = courseId;
+                        lastClickEnrollEmailOptIn = emailOptIn;
+                        startActivityForResult(environment.getRouter().getRegisterIntent(), LOG_IN_REQUEST_CODE);
+                    }
+                });
+        client = new
+
+                URLInterceptorWebViewClient(this, webView);
 
         // if all the links are to be treated as external
-        client.setAllLinksAsExternal(isAllLinksExternal());
+        client.setAllLinksAsExternal(
 
-        client.setActionListener(this);
+                isAllLinksExternal());
+
+        client.setActionListener(defaultActionListener);
         client.setPageStatusListener(pageStatusListener);
     }
 
@@ -145,19 +149,10 @@ public abstract class BaseWebViewFindCoursesActivity extends BaseFragmentActivit
     }
 
     @Override
-    public void onClickCourseInfo(String pathId) {
-        //If Path id is not null or empty then call CourseInfoActivity
-        if (!TextUtils.isEmpty(pathId)) {
-            logger.debug("PathId" + pathId);
-            environment.getRouter().showCourseInfo(this, pathId);
-        }
-    }
-
-    @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == LOG_IN_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-            onClickEnroll(lastClickEnrollCourseId, lastClickEnrollEmailOptIn);
+            defaultActionListener.onClickEnroll(lastClickEnrollCourseId, lastClickEnrollEmailOptIn);
         }
     }
 
@@ -168,8 +163,7 @@ public abstract class BaseWebViewFindCoursesActivity extends BaseFragmentActivit
         outState.putBoolean(INSTANCE_EMAIL_OPT_IN, lastClickEnrollEmailOptIn);
     }
 
-    @Override
-    public void onClickEnroll(final String courseId, final boolean emailOptIn) {
+    /*private void onClickEnroll(final String courseId, final boolean emailOptIn) {
         if (isTaskInProgress) {
             // avoid duplicate actions
             logger.debug("already enroll task is in progress, so skipping Enroll action");
@@ -240,31 +234,7 @@ public abstract class BaseWebViewFindCoursesActivity extends BaseFragmentActivit
                         }
                     }
                 });
-    }
-
-    private void showEnrollErrorMessage(final String courseId, final boolean emailOptIn) {
-        if (isActivityStarted()) {
-            Map<String, String> dialogMap = new HashMap<String, String>();
-            dialogMap.put("message_1", getString(R.string.enrollment_failure));
-
-            dialogMap.put("yes_button", getString(R.string.try_again));
-            dialogMap.put("no_button", getString(R.string.label_cancel));
-            EnrollmentFailureDialogFragment failureDialogFragment = EnrollmentFailureDialogFragment
-                    .newInstance(dialogMap, new IDialogCallback() {
-                        @Override
-                        public void onPositiveClicked() {
-                            onClickEnroll(courseId, emailOptIn);
-                        }
-
-                        @Override
-                        public void onNegativeClicked() {
-                        }
-                    });
-            failureDialogFragment.setStyle(DialogFragment.STYLE_NO_TITLE, 0);
-            failureDialogFragment.show(getSupportFragmentManager(), "dialog");
-            failureDialogFragment.setCancelable(false);
-        }
-    }
+    }*/
 
     /**
      * By default, all links will not be treated as external.
