@@ -13,7 +13,7 @@ import java.util.Map;
  * Object class to parse and store links that we need within a WebView.
  */
 public class WebViewLink {
-    private static final String SCHEME = "edxapp";
+    public static final String SCHEME = "edxapp";
     public static final String PATH_ID_COURSE_PREFIX = "course/";
 
     public enum Authority {
