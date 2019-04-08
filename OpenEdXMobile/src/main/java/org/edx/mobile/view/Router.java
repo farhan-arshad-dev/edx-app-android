@@ -25,6 +25,7 @@ import org.edx.mobile.discussion.DiscussionThread;
 import org.edx.mobile.discussion.DiscussionTopic;
 import org.edx.mobile.event.LogoutEvent;
 import org.edx.mobile.model.api.EnrolledCoursesResponse;
+import org.edx.mobile.model.course.CourseInfo;
 import org.edx.mobile.module.analytics.AnalyticsRegistry;
 import org.edx.mobile.module.notification.NotificationDelegate;
 import org.edx.mobile.module.prefs.LoginPrefs;
@@ -45,6 +46,7 @@ public class Router {
     public static final String EXTRA_ANNOUNCEMENTS = "announcements";
     public static final String EXTRA_BUNDLE = "bundle";
     public static final String EXTRA_COURSE_ID = "course_id";
+    public static final String EXTRA_COURSE_INFO = "course_info";
     public static final String EXTRA_COURSE_DETAIL = "course_detail";
     public static final String EXTRA_COURSE_DATA = "course_data";
     public static final String EXTRA_COURSE_UNIT = "course_unit";
@@ -154,9 +156,9 @@ public class Router {
 
     public void showCourseDashboardTabs(@NonNull Activity activity,
                                         @Nullable EnrolledCoursesResponse model,
-                                        @Nullable String courseId, boolean announcements,
+                                        @Nullable CourseInfo courseInfo, boolean announcements,
                                         @Nullable @ScreenDef String screenName) {
-        activity.startActivity(CourseTabsDashboardActivity.newIntent(activity, model, courseId, announcements, screenName));
+        activity.startActivity(CourseTabsDashboardActivity.newIntent(activity, model, courseInfo, announcements, screenName));
     }
 
     /**

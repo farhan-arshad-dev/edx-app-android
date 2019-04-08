@@ -26,6 +26,7 @@ import org.edx.mobile.deeplink.ScreenDef;
 import org.edx.mobile.logger.Logger;
 import org.edx.mobile.model.FragmentItemModel;
 import org.edx.mobile.model.api.EnrolledCoursesResponse;
+import org.edx.mobile.model.course.CourseInfo;
 import org.edx.mobile.module.analytics.Analytics;
 import org.edx.mobile.module.analytics.AnalyticsRegistry;
 import org.edx.mobile.module.db.DataCallback;
@@ -61,12 +62,12 @@ public class CourseTabsDashboardFragment extends TabsBaseFragment {
 
     @NonNull
     public static CourseTabsDashboardFragment newInstance(
-            @Nullable EnrolledCoursesResponse courseData, @Nullable String courseId,
+            @Nullable EnrolledCoursesResponse courseData, @Nullable CourseInfo courseInfo,
             @Nullable @ScreenDef String screenName) {
         final CourseTabsDashboardFragment fragment = new CourseTabsDashboardFragment();
         final Bundle bundle = new Bundle();
         bundle.putSerializable(Router.EXTRA_COURSE_DATA, courseData);
-        bundle.putSerializable(Router.EXTRA_COURSE_ID, courseId);
+        bundle.putSerializable(Router.EXTRA_COURSE_INFO, courseInfo);
         bundle.putSerializable(Router.EXTRA_SCREEN_NAME, screenName);
         fragment.setArguments(bundle);
         return fragment;
@@ -119,7 +120,7 @@ public class CourseTabsDashboardFragment extends TabsBaseFragment {
     }
 
     private void fetchCourseById() {
-        final String courseId = getArguments().getString(Router.EXTRA_COURSE_ID);
+        final String courseId = ((CourseInfo) getArguments().getSerializable(Router.EXTRA_COURSE_INFO)).courseId;
         courseApi.getEnrolledCourses().enqueue(new CourseAPI.GetCourseByIdCallback(getActivity(), courseId) {
             @Override
             protected void onResponse(@NonNull final EnrolledCoursesResponse course) {

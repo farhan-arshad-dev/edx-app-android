@@ -3,7 +3,10 @@ package org.edx.mobile.deeplink;
 import android.app.Activity;
 import android.support.annotation.NonNull;
 
+import com.google.gson.Gson;
+
 import org.edx.mobile.logger.Logger;
+import org.edx.mobile.model.course.CourseInfo;
 import org.edx.mobile.module.prefs.LoginPrefs;
 import org.edx.mobile.util.Config;
 import org.edx.mobile.view.Router;
@@ -43,9 +46,10 @@ public class DeepLinkManager {
         switch (screenName) {
             case Screen.COURSE_DASHBOARD:
             case Screen.COURSE_VIDEOS:
-            case Screen.COURSE_DISCUSSION: {
-                final String courseId = paramsJson.getString(KEY_COURSE_ID);
-                router.showCourseDashboardTabs(activity, null, courseId, false, screenName);
+            case Screen.COURSE_DISCUSSION:
+            case Screen.DISCUSSION_POST: {
+                final CourseInfo courseInfo = new Gson().fromJson(paramsJson.toString(), CourseInfo.class);
+                router.showCourseDashboardTabs(activity, null, courseInfo, false, screenName);
                 break;
             }
             case Screen.PROGRAM:
