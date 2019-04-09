@@ -268,9 +268,11 @@ public class CourseTabsDashboardFragment extends TabsBaseFragment {
         // Add discussion tab
         if (environment.getConfig().isDiscussionsEnabled() &&
                 !TextUtils.isEmpty(courseData.getCourse().getDiscussionUrl())) {
+            final Bundle bundle = CourseDiscussionTopicsFragment.makeArguments(courseData);
+            bundle.putAll(getArguments());
             items.add(new FragmentItemModel(CourseDiscussionTopicsFragment.class,
                     getResources().getString(R.string.discussion_title), FontAwesomeIcons.fa_comments_o,
-                    CourseDiscussionTopicsFragment.makeArguments(courseData),
+                    bundle,
                     new FragmentItemModel.FragmentStateListener() {
                         @Override
                         public void onFragmentSelected() {

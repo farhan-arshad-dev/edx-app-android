@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.widget.TextViewCompat;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -30,6 +31,7 @@ import org.edx.mobile.http.notifications.FullScreenErrorNotification;
 import org.edx.mobile.interfaces.RefreshListener;
 import org.edx.mobile.logger.Logger;
 import org.edx.mobile.model.api.EnrolledCoursesResponse;
+import org.edx.mobile.model.course.CourseInfo;
 import org.edx.mobile.util.SoftKeyboardUtil;
 import org.edx.mobile.view.adapters.DiscussionTopicsAdapter;
 import org.edx.mobile.view.common.TaskProgressCallback;
@@ -165,6 +167,10 @@ public class CourseDiscussionTopicsFragment extends OfflineSupportBaseFragment
                 List<DiscussionTopicDepth> allTopicsWithDepth = DiscussionTopicDepth.createFromDiscussionTopics(allTopics);
                 discussionTopicsAdapter.setItems(allTopicsWithDepth);
                 discussionTopicsAdapter.notifyDataSetChanged();
+                // wait until get the discussion topics list and then show the thread list screen
+                // for the specific discussion topic, otherwise unable to set the screen name
+                // for the thread list screen
+                showCourseDiscussionTopic(allTopicsWithDepth);
             }
 
             @Override
@@ -174,6 +180,26 @@ public class CourseDiscussionTopicsFragment extends OfflineSupportBaseFragment
                 }
             }
         });
+    }
+
+    private void showCourseDiscussionTopic(List<DiscussionTopicDepth> allTopicsWithDepth) {
+        CourseInfo courseInfo = (CourseInfo) getArguments().getSerializable(Router.EXTRA_COURSE_INFO);
+        if (courseInfo != null && !TextUtils.isEmpty(courseInfo.topicId)) {
+            DiscussionTopic discussionTopic = null;
+            for (DiscussionTopicDepth discussionTopicDepth : allTopicsWithDepth) {
+                final String discussionTopicIdentifier = discussionTopicDepth.getDiscussionTopic().getIdentifier();
+                if (!TextUtils.isEmpty(discussionTopicIdentifier) &&
+                        discussionTopicIdentifier.equals(courseInfo.topicId)) {
+                    discussionTopic = discussionTopicDepth.getDiscussionTopic();
+                }
+            }
+            if (discussionTopic != null) {
+                router.showCourseDiscussionPostsForDiscussionTopic(
+                        getActivity(),
+                        discussionTopic,
+                        courseData);
+            }
+        }
     }
 
     @Override
