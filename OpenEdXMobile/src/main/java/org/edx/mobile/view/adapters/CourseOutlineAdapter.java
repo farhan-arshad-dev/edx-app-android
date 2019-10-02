@@ -35,9 +35,11 @@ import org.edx.mobile.model.course.VideoBlockModel;
 import org.edx.mobile.model.db.DownloadEntry;
 import org.edx.mobile.module.db.DataCallback;
 import org.edx.mobile.module.db.IDatabase;
+import org.edx.mobile.module.storage.DownloadedVideoDeletedEvent;
 import org.edx.mobile.module.storage.IStorage;
 import org.edx.mobile.util.Config;
 import org.edx.mobile.util.DateUtil;
+import org.edx.mobile.util.FileUtil;
 import org.edx.mobile.util.MemoryUtil;
 import org.edx.mobile.util.ResourceUtil;
 import org.edx.mobile.util.TimeZoneUtils;
@@ -45,11 +47,14 @@ import org.edx.mobile.util.VideoUtil;
 import org.edx.mobile.util.images.CourseCardUtils;
 import org.edx.mobile.util.images.TopAnchorFillWidthTransformation;
 
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
+
+import de.greenrobot.event.EventBus;
 
 public class CourseOutlineAdapter extends BaseAdapter {
 
@@ -424,21 +429,18 @@ public class CourseOutlineAdapter extends BaseAdapter {
                     new DataCallback<DownloadEntry.DownloadedState>(true) {
                         @Override
                         public void onResult(DownloadEntry.DownloadedState state) {
+                            final View.OnClickListener bulkDownloadListener = v -> {
+                                /*
+                                 * Assign preferred downloadable url to {@link DownloadEntry#url}
+                                 * to use this url to download. After downloading
+                                 * only downloaded video path will be used for streaming.
+                                 */
+                                videoData.url = VideoUtil.getPreferredVideoUrlForDownloading(videoBlockModel.getData());
+                                downloadListener.download(videoData);
+                            };
                             if (state == null || state == DownloadEntry.DownloadedState.ONLINE) {
                                 // not yet downloaded
-                                setRowStateOnDownload(viewHolder, DownloadEntry.DownloadedState.ONLINE,
-                                        new View.OnClickListener() {
-                                            @Override
-                                            public void onClick(View v) {
-                                                /**
-                                                 * Assign preferred downloadable url to {@link DownloadEntry#url}
-                                                 * to use this url to download. After downloading
-                                                 * only downloaded video path will be used for streaming.
-                                                 */
-                                                videoData.url = VideoUtil.getPreferredVideoUrlForDownloading(videoBlockModel.getData());
-                                                downloadListener.download(videoData);
-                                            }
-                                        });
+                                setRowStateOnDownload(viewHolder, DownloadEntry.DownloadedState.ONLINE, bulkDownloadListener);
                             } else if (state == DownloadEntry.DownloadedState.DOWNLOADING) {
                                 // may be download in progress
                                 setRowStateOnDownload(viewHolder, DownloadEntry.DownloadedState.DOWNLOADING,
@@ -449,7 +451,17 @@ public class CourseOutlineAdapter extends BaseAdapter {
                                             }
                                         });
                             } else if (state == DownloadEntry.DownloadedState.DOWNLOADED) {
-                                setRowStateOnDownload(viewHolder, DownloadEntry.DownloadedState.DOWNLOADED, null);
+                                DownloadEntry.DownloadedState fileState = DownloadEntry.DownloadedState.DOWNLOADED;
+                                if (!FileUtil.isVideoFileExists(context, videoData.filepath)) {
+                                    fileState = DownloadEntry.DownloadedState.ONLINE;
+                                    VideoUtil.updateVideoDownloadState(dbStore,
+                                            videoData,
+                                            DownloadEntry.DownloadedState.ONLINE.ordinal()
+                                    );
+                                    FileUtil.deleteRecursive(new File(videoData.filepath));
+                                    EventBus.getDefault().post(new DownloadedVideoDeletedEvent());
+                                }
+                                setRowStateOnDownload(viewHolder, fileState, fileState == DownloadEntry.DownloadedState.ONLINE ? bulkDownloadListener : null);
                             }
                         }
 

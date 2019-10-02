@@ -1,6 +1,8 @@
 package org.edx.mobile.util;
 
 import android.content.Context;
+import android.media.MediaMetadataRetriever;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.support.annotation.NonNull;
@@ -246,5 +248,31 @@ public class FileUtil {
         // Don't break the recursion upon encountering an error
         // noinspection ResultOfMethodCallIgnored
         fileOrDirectory.delete();
+    }
+
+    /**
+     * Utility method to check the exists of a local video file of the given path.
+     *
+     * @param context  The current context
+     * @param filepath Downloaded video file path.
+     * @return True if video file id exist and not corrupted otherwise False.
+     */
+    public static boolean isVideoFileExists(@NonNull Context context, @NonNull String filepath) {
+        final File videoFile = new File(filepath);
+        if (videoFile.exists()) {
+            // inspiration of this solution is taken from this link: https://stackoverflow.com/a/34440432
+            final MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+            // if downloaded file is corrupted MediaMetadataRetriever may throw
+            // exception shows file has no more media content.
+            try {
+                retriever.setDataSource(context, Uri.fromFile(videoFile));
+                String hasVideo = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO);
+                if (hasVideo.equals("yes")) {
+                    return true;
+                }
+            } catch (Exception ignore) {
+            }
+        }
+        return false;
     }
 }
