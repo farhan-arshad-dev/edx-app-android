@@ -251,26 +251,28 @@ public class FileUtil {
     }
 
     /**
-     * Utility method to check the exists of a local video file of the given path.
+     * Check that the video file exists on a given file path
      *
      * @param context  The current context
-     * @param filepath Downloaded video file path.
-     * @return True if video file id exist and not corrupted otherwise False.
+     * @param filepath Video storage file path
+     * @return True if video file exists on a given path
      */
     public static boolean isVideoFileExists(@NonNull Context context, @NonNull String filepath) {
         final File videoFile = new File(filepath);
         if (videoFile.exists()) {
-            // inspiration of this solution is taken from this link: https://stackoverflow.com/a/34440432
+            // Inspiration of this solution has taken from the following answer
+            // https://stackoverflow.com/a/34440432
             final MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-            // if downloaded file is corrupted MediaMetadataRetriever may throw
-            // exception shows file has no more media content.
+            // If something is wrong with the path or with the video file following code may
+            // throw an exception
             try {
                 retriever.setDataSource(context, Uri.fromFile(videoFile));
-                String hasVideo = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO);
-                if (hasVideo.equals("yes")) {
+                final String hasVideo = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO);
+                if ("yes".equals(hasVideo)) {
                     return true;
                 }
-            } catch (Exception ignore) {
+            } catch (Exception e) {
+                // Ignore exception
             }
         }
         return false;

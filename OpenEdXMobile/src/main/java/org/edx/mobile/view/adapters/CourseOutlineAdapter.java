@@ -429,18 +429,10 @@ public class CourseOutlineAdapter extends BaseAdapter {
                     new DataCallback<DownloadEntry.DownloadedState>(true) {
                         @Override
                         public void onResult(DownloadEntry.DownloadedState state) {
-                            final View.OnClickListener bulkDownloadListener = v -> {
-                                /*
-                                 * Assign preferred downloadable url to {@link DownloadEntry#url}
-                                 * to use this url to download. After downloading
-                                 * only downloaded video path will be used for streaming.
-                                 */
-                                videoData.url = VideoUtil.getPreferredVideoUrlForDownloading(videoBlockModel.getData());
-                                downloadListener.download(videoData);
-                            };
                             if (state == null || state == DownloadEntry.DownloadedState.ONLINE) {
                                 // not yet downloaded
-                                setRowStateOnDownload(viewHolder, DownloadEntry.DownloadedState.ONLINE, bulkDownloadListener);
+                                setRowStateOnDownload(viewHolder, DownloadEntry.DownloadedState.ONLINE,
+                                        getBulkDownloadListener(videoBlockModel, videoData));
                             } else if (state == DownloadEntry.DownloadedState.DOWNLOADING) {
                                 // may be download in progress
                                 setRowStateOnDownload(viewHolder, DownloadEntry.DownloadedState.DOWNLOADING,
@@ -451,17 +443,19 @@ public class CourseOutlineAdapter extends BaseAdapter {
                                             }
                                         });
                             } else if (state == DownloadEntry.DownloadedState.DOWNLOADED) {
-                                DownloadEntry.DownloadedState fileState = DownloadEntry.DownloadedState.DOWNLOADED;
                                 if (!FileUtil.isVideoFileExists(context, videoData.filepath)) {
-                                    fileState = DownloadEntry.DownloadedState.ONLINE;
-                                    VideoUtil.updateVideoDownloadState(dbStore,
-                                            videoData,
-                                            DownloadEntry.DownloadedState.ONLINE.ordinal()
-                                    );
+                                    state = DownloadEntry.DownloadedState.ONLINE;
+                                    // Update video state in DB
+                                    VideoUtil.updateVideoDownloadState(dbStore, videoData,
+                                            state.ordinal());
+                                    // Delete corrupt file from storage if exists
                                     FileUtil.deleteRecursive(new File(videoData.filepath));
+                                    // Broadcast video deletion event
                                     EventBus.getDefault().post(new DownloadedVideoDeletedEvent());
                                 }
-                                setRowStateOnDownload(viewHolder, fileState, fileState == DownloadEntry.DownloadedState.ONLINE ? bulkDownloadListener : null);
+                                setRowStateOnDownload(viewHolder, state,
+                                        state == DownloadEntry.DownloadedState.ONLINE ?
+                                                getBulkDownloadListener(videoBlockModel, videoData) : null);
                             }
                         }
 
@@ -473,6 +467,19 @@ public class CourseOutlineAdapter extends BaseAdapter {
                     });
         }
 
+    }
+
+    private View.OnClickListener getBulkDownloadListener(@NonNull VideoBlockModel videoBlockModel,
+                                                         @NonNull DownloadEntry videoData) {
+        return v -> {
+            /*
+             * Assign preferred downloadable url to {@link DownloadEntry#url}
+             * to use this url to download. After downloading
+             * only downloaded video path will be used for streaming.
+             */
+            videoData.url = VideoUtil.getPreferredVideoUrlForDownloading(videoBlockModel.getData());
+            downloadListener.download(videoData);
+        };
     }
 
     private void getRowViewForContainer(ViewHolder holder,
