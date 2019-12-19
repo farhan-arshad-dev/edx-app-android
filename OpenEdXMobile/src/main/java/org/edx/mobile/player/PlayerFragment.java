@@ -22,7 +22,6 @@ import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
-import android.view.accessibility.CaptioningManager;
 import android.widget.FrameLayout.LayoutParams;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -64,17 +63,14 @@ import org.edx.mobile.view.dialog.IListDialogCallback;
 import org.edx.mobile.view.dialog.RatingDialogFragment;
 import org.edx.mobile.view.dialog.SpeedDialogFragment;
 
-import java.io.InputStream;
 import java.io.Serializable;
 import java.text.ParseException;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 
 import subtitleFile.Caption;
-import subtitleFile.FormatSRT;
 import subtitleFile.TimedTextObject;
 
 @SuppressLint("WrongViewCast")
@@ -116,11 +112,9 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
     private AudioManager audioManager;
     private boolean playOnFocusGain = false;
     private Handler subtitleDisplayHandler = new Handler();
-    private Handler subtitleFetchHandler = new Handler();
     private CCLanguageDialogFragment ccFragment;
     private SpeedDialogFragment speedDialogFragment;
     private PopupWindow settingPopup;
-    private LinkedHashMap<String, TimedTextObject> srtList;
     private LinkedHashMap<String, String> langList;
     private TimedTextObject subtitlesObj;
     @Inject
@@ -435,6 +429,7 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
     @Override
     public void onDestroy() {
         super.onDestroy();
+        transcriptManager.cancelTranscriptDownloading();
         if (player != null) {
             // reset player when user goes back, and there is no state saving happened
             player.reset();
@@ -511,13 +506,8 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
         if (video != null) {
             this.videoEntry = video;
         }
-
-        if (trModel != null) {
-            this.transcript = trModel;
-            transcriptManager.downloadTranscriptsForVideo(trModel);
-            //initializeClosedCaptioning();
-        }
-
+        this.transcript = trModel;
+        this.langList = LocaleUtils.getLanguageList(transcript);
         // request focus on audio channel, as we are starting playback
         requestAudioFocus();
         String path = VideoUtil.getVideoPath(getActivity(), videoEntry);
@@ -537,7 +527,6 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
                 }
             }
 
-            this.transcript = trModel;
             player.setLMSUrl(videoEntry.lmsUrl);
             player.setVideoTitle(videoEntry.title);
 
@@ -552,6 +541,19 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
                 player.setUriAndPlay(path, seekTo);
         } catch (Exception e) {
             logger.error(e);
+        }
+    }
+
+    private void downloadTranscript() {
+        if (transcript != null) {
+            String transcriptUrl = LocaleUtils.getTranscriptURL(getActivity(), transcript);
+            transcriptManager.downloadTranscriptsForVideo(transcriptUrl, (TimedTextObject transcriptTimedTextObject) -> {
+                this.subtitlesObj = transcriptTimedTextObject;
+                // check if screen is destroyed, there is no need to send the request to update the UI
+                if (!getActivity().isDestroyed()) {
+                    displaySrtData();
+                }
+            });
         }
     }
 
@@ -801,9 +803,9 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
 
         clearAllErrors();
         player.setPlaybackSpeed(loginPrefs.getDefaultPlaybackSpeed());
-        if(langList!=null){
+        if (langList != null) {
             displaySrtData();
-        }else{
+        } else {
             initializeClosedCaptioning();
         }
 
@@ -1172,74 +1174,6 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
     };
 
     /**
-     * This runnable is used the fetch the Subtitle in TimedTextObject
-     */
-    private Runnable subtitleFetchProcessesor = new Runnable()
-    {
-        public void run()
-        {
-            if(srtList!=null){
-                srtList = null;
-            }
-
-            srtList = new LinkedHashMap<>();
-            try
-            {
-                final LinkedHashMap<String, InputStream> localHashMap = transcriptManager
-                        .fetchTranscriptsForVideo(transcript);
-
-                if (localHashMap != null){
-                    for(String thisKey : localHashMap.keySet()){
-                        InputStream localInputStream = localHashMap.get(thisKey);
-                        if (localInputStream != null)
-                        {
-                            TimedTextObject localTimedTextObject =
-                                    new FormatSRT().parseFile("temp.srt", localInputStream);
-                            srtList.put(thisKey, localTimedTextObject);
-                            localInputStream.close();
-                        }
-                    }
-
-                    if ((srtList == null) || (srtList.size() == 0)) {
-                        subtitleFetchHandler.postDelayed(subtitleFetchProcessesor, 100);
-                    }else{
-                        displaySrtData();
-                    }
-                }else{
-                    subtitleFetchHandler.postDelayed(subtitleFetchProcessesor, DELAY_TIME_MS);
-                }
-            }catch (Exception localException) {
-                logger.error(localException);
-            }
-
-        }
-    };
-
-    /**
-     * Handler initialized for fetching Subtitles
-     */
-    private void fetchSubtitlesTask(){
-        try
-        {
-            if (this.subtitleFetchHandler != null)
-            {
-                subtitleFetchHandler.removeCallbacks(this.subtitleFetchProcessesor);
-                subtitleFetchHandler = null;
-            }
-            langList = LocaleUtils.getLanguageList(transcript);
-            final LinkedHashMap<String, String> languageList = langList;
-            if(languageList!=null && languageList.size()>0){
-                subtitleFetchHandler = new Handler();
-                if (subtitleFetchProcessesor != null)
-                    subtitleFetchHandler.post(this.subtitleFetchProcessesor);
-            }
-        } catch (Exception localException) {
-            logger.error(localException);
-        }
-    }
-
-
-    /**
      * This function sets the closed caption data on the TextView
      */
     private void setClosedCaptionData(Caption text){
@@ -1332,7 +1266,7 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
         try{
             removeSubtitleCallBack();
             hideClosedCaptioning();
-            fetchSubtitlesTask();
+            downloadTranscript();
         }catch(Exception e){
             logger.error(e);
         }
@@ -1343,18 +1277,11 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
      */
     private void removeSubtitleCallBack() {
 
-        if (subtitleDisplayHandler != null)
-        {
+        if (subtitleDisplayHandler != null) {
             subtitleDisplayHandler.removeCallbacks(SUBTITLES_PROCESSOR_RUNNABLE);
             subtitleDisplayHandler = null;
             hideClosedCaptioning();
             subtitlesObj = null;
-            srtList = null;
-        }
-        if (subtitleFetchHandler != null)
-        {
-            subtitleFetchHandler.removeCallbacks(subtitleFetchProcessesor);
-            subtitleFetchHandler = null;
         }
     }
 
@@ -1535,7 +1462,7 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
                                 player.getCurrentPosition() / AppConstants.MILLISECONDS_PER_SECOND,
                                 languageSubtitle, videoEntry.eid, videoEntry.lmsUrl);
                     }
-                    displaySrtData();
+                    downloadTranscript();
                     if (player != null) {
                         player.getController().setSettingsBtnDrawable(false);
                         player.getController().setAutoHide(true);
@@ -1608,50 +1535,21 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
             subtitleDisplayHandler.removeCallbacks(SUBTITLES_PROCESSOR_RUNNABLE);
         }
         resetClosedCaptioning();
-        if (srtList != null && srtList.size() > 0) {
-            String languageSubtitle = getSubtitleLanguage();
-
-            // Check if captioning is enabled in accessibility settings and set the captioning language implicitly
-            if (languageSubtitle == null) {
-                final CaptioningManager cManager = (CaptioningManager) getContext().getSystemService(Context.CAPTIONING_SERVICE);
-                if (cManager.isEnabled()) {
-                    final String defaultCcLanguage;
-                    {
-                        final Locale cManagerLocale = cManager.getLocale();
-                        if (cManagerLocale != null) {
-                            defaultCcLanguage = cManagerLocale.getLanguage();
-                        } else {
-                            defaultCcLanguage = Locale.getDefault().getLanguage();
-                        }
-                    }
-                    if (srtList.containsKey(defaultCcLanguage)) {
-                        languageSubtitle = defaultCcLanguage;
-                        setSubtitleLanguage(languageSubtitle);
-                    }
-                }
+        String subtitleLanguage = LocaleUtils.getCurrentDeviceLanguage(getActivity());
+        if (!android.text.TextUtils.isEmpty(subtitleLanguage) &&
+                transcript.entrySet().contains(subtitleLanguage)) {
+            setSubtitleLanguage(subtitleLanguage);
+        }
+        if (subtitlesObj != null) {
+            closedCaptionsEnabled = true;
+            if (player != null) {
+                environment.getAnalyticsRegistry().trackShowTranscript(videoEntry.videoId,
+                        player.getCurrentPosition() / AppConstants.MILLISECONDS_PER_SECOND,
+                        videoEntry.eid, videoEntry.lmsUrl);
             }
-
-            if (languageSubtitle != null) {
-                subtitlesObj = srtList.get(languageSubtitle);
-                if (subtitlesObj != null) {
-                    closedCaptionsEnabled = true;
-                    if (player != null) {
-                        environment.getAnalyticsRegistry().trackShowTranscript(videoEntry.videoId,
-                                player.getCurrentPosition() / AppConstants.MILLISECONDS_PER_SECOND,
-                                videoEntry.eid, videoEntry.lmsUrl);
-                    }
-                }
-            }
-
             if (transcriptListener != null) {
-                if (subtitlesObj == null) {
-                    subtitlesObj = srtList.entrySet().iterator().next().getValue();
-                }
                 transcriptListener.updateTranscript(subtitlesObj);
-            }
-
-            // Run the subtitle handler if any among transcripts or closed captions is enabled
-            if (subtitlesObj != null || transcriptListener != null) {
+                // Run the subtitle handler if any among transcripts or closed captions is enabled
                 if (subtitleDisplayHandler == null) {
                     subtitleDisplayHandler = new Handler();
                 }
