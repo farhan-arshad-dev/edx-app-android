@@ -131,11 +131,13 @@ public class TranscriptManager {
                 @Override
                 public void onDownloadComplete(String response) {
                     try {
-                        put(downloadLink, response);
-                        if (downloadListener != null) {
-                            final InputStream transcriptInputStream = fetchTranscriptResponse(downloadLink);
-                            TimedTextObject transcriptTimedTextObject = convertIntoTimedTextObject(transcriptInputStream);
-                            downloadListener.onDownloadComplete(transcriptTimedTextObject);
+                        if (response != null) {
+                            put(downloadLink, response);
+                            if (downloadListener != null) {
+                                final InputStream transcriptInputStream = fetchTranscriptResponse(downloadLink);
+                                TimedTextObject transcriptTimedTextObject = convertIntoTimedTextObject(transcriptInputStream);
+                                downloadListener.onDownloadComplete(transcriptTimedTextObject);
+                            }
                         }
                     } catch (IOException e) {
                         logger.error(e);

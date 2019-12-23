@@ -65,7 +65,6 @@ import org.edx.mobile.view.dialog.SpeedDialogFragment;
 
 import java.io.Serializable;
 import java.text.ParseException;
-import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -111,14 +110,11 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
     private View.OnClickListener prevListner;
     private AudioManager audioManager;
     private boolean playOnFocusGain = false;
-    private Handler subtitleDisplayHandler = new Handler();
     private CCLanguageDialogFragment ccFragment;
     private SpeedDialogFragment speedDialogFragment;
     private PopupWindow settingPopup;
     private LinkedHashMap<String, String> langList;
     private TimedTextObject subtitlesObj;
-    @Inject
-    private TranscriptManager transcriptManager;
     private TranscriptModel transcript;
     private DownloadEntry videoEntry;
     private Object touchExplorationStateChangeListener;
@@ -429,7 +425,6 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
     @Override
     public void onDestroy() {
         super.onDestroy();
-        transcriptManager.cancelTranscriptDownloading();
         if (player != null) {
             // reset player when user goes back, and there is no state saving happened
             player.reset();
@@ -541,19 +536,6 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
                 player.setUriAndPlay(path, seekTo);
         } catch (Exception e) {
             logger.error(e);
-        }
-    }
-
-    private void downloadTranscript() {
-        if (transcript != null) {
-            String transcriptUrl = LocaleUtils.getTranscriptURL(getActivity(), transcript);
-            transcriptManager.downloadTranscriptsForVideo(transcriptUrl, (TimedTextObject transcriptTimedTextObject) -> {
-                this.subtitlesObj = transcriptTimedTextObject;
-                // check if screen is destroyed, there is no need to send the request to update the UI
-                if (!getActivity().isDestroyed()) {
-                    displaySrtData();
-                }
-            });
         }
     }
 
@@ -779,7 +761,6 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
 
         // clear errors
         clearAllErrors();
-        initializeClosedCaptioning();
         handler.postDelayed(unfreezeCallback, UNFREEZE_DELAY_MS);
         environment.getAnalyticsRegistry().trackVideoLoading(videoEntry.videoId, videoEntry.eid,
                 videoEntry.lmsUrl);
@@ -803,8 +784,8 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
 
         clearAllErrors();
         player.setPlaybackSpeed(loginPrefs.getDefaultPlaybackSpeed());
-        if (langList != null) {
-            displaySrtData();
+        if (subtitlesObj != null) {
+            showClosedCaptionData(subtitlesObj);
         } else {
             initializeClosedCaptioning();
         }
@@ -1138,42 +1119,6 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
     }
 
     /**
-     * This runnable handles the displaying of
-     * Subtitles on the screen per 100 mili seconds
-     */
-    private Runnable SUBTITLES_PROCESSOR_RUNNABLE = new Runnable() {
-        @Override
-        public void run() {
-            //This has been reset so that previous cc will not be displayed
-            resetClosedCaptioning();
-            if (player != null && (player.isPlaying() || player.isPaused())) {
-                long currentPos = player.getCurrentPosition();
-                if (subtitlesObj != null) {
-                    Collection<Caption> subtitles = subtitlesObj.captions.values();
-                    int currentSubtitleIndex = 0;
-                    for (Caption subtitle : subtitles) {
-                        int startMillis = subtitle.start.getMseconds();
-                        int endMillis = subtitle.end.getMseconds();
-                        if (currentPos >= startMillis && currentPos <= endMillis) {
-                            setClosedCaptionData(closedCaptionsEnabled ? subtitle : null);
-                            if (transcriptListener != null) {
-                                transcriptListener.updateSelection(currentSubtitleIndex);
-                            }
-                            break;
-                        } else if (currentPos > endMillis) {
-                            setClosedCaptionData(null);
-                        }
-                        currentSubtitleIndex++;
-                    }
-                } else {
-                    setClosedCaptionData(null);
-                }
-            }
-            subtitleDisplayHandler.postDelayed(this, SUBTITLES_DISPLAY_DELAY_MS);
-        }
-    };
-
-    /**
      * This function sets the closed caption data on the TextView
      */
     private void setClosedCaptionData(Caption text){
@@ -1262,12 +1207,14 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
     /**
      * Initialiaze and reset Closed Captioning handlers
      */
-    private void initializeClosedCaptioning(){
-        try{
+    private void initializeClosedCaptioning() {
+        try {
             removeSubtitleCallBack();
             hideClosedCaptioning();
-            downloadTranscript();
-        }catch(Exception e){
+            if (transcriptListener != null) {
+                transcriptListener.downloadTranscript();
+            }
+        } catch (Exception e) {
             logger.error(e);
         }
     }
@@ -1276,13 +1223,11 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
      * This removes the callbacks and resets the handlers
      */
     private void removeSubtitleCallBack() {
-
-        if (subtitleDisplayHandler != null) {
-            subtitleDisplayHandler.removeCallbacks(SUBTITLES_PROCESSOR_RUNNABLE);
-            subtitleDisplayHandler = null;
-            hideClosedCaptioning();
-            subtitlesObj = null;
+        if(transcriptListener!=null){
+            transcriptListener.updateTranscriptCallbackStatus(false);
         }
+        hideClosedCaptioning();
+        subtitlesObj = null;
     }
 
     @Override
@@ -1462,7 +1407,9 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
                                 player.getCurrentPosition() / AppConstants.MILLISECONDS_PER_SECOND,
                                 languageSubtitle, videoEntry.eid, videoEntry.lmsUrl);
                     }
-                    downloadTranscript();
+                    if (transcriptListener != null) {
+                        transcriptListener.downloadTranscript();
+                    }
                     if (player != null) {
                         player.getController().setSettingsBtnDrawable(false);
                         player.getController().setAutoHide(true);
@@ -1524,37 +1471,6 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
     private void hideCCPopUp() {
         if (ccFragment != null && ccFragment.isVisible()) {
             ccFragment.dismiss();
-        }
-    }
-
-    /**
-     * This function is used to display CC data when a transcript is selected
-     */
-    private void displaySrtData() {
-        if (subtitleDisplayHandler != null) {
-            subtitleDisplayHandler.removeCallbacks(SUBTITLES_PROCESSOR_RUNNABLE);
-        }
-        resetClosedCaptioning();
-        String subtitleLanguage = LocaleUtils.getCurrentDeviceLanguage(getActivity());
-        if (!android.text.TextUtils.isEmpty(subtitleLanguage) &&
-                transcript.entrySet().contains(subtitleLanguage)) {
-            setSubtitleLanguage(subtitleLanguage);
-        }
-        if (subtitlesObj != null) {
-            closedCaptionsEnabled = true;
-            if (player != null) {
-                environment.getAnalyticsRegistry().trackShowTranscript(videoEntry.videoId,
-                        player.getCurrentPosition() / AppConstants.MILLISECONDS_PER_SECOND,
-                        videoEntry.eid, videoEntry.lmsUrl);
-            }
-            if (transcriptListener != null) {
-                transcriptListener.updateTranscript(subtitlesObj);
-                // Run the subtitle handler if any among transcripts or closed captions is enabled
-                if (subtitleDisplayHandler == null) {
-                    subtitleDisplayHandler = new Handler();
-                }
-                subtitleDisplayHandler.post(SUBTITLES_PROCESSOR_RUNNABLE);
-            }
         }
     }
 
@@ -1764,5 +1680,43 @@ public class PlayerFragment extends BaseFragment implements IPlayerListener, Ser
 
     public boolean isCastingOnRemoteDevice() {
         return googleCastDelegate != null && googleCastDelegate.isConnected();
+    }
+
+    public long getCurrentPosition() {
+        return player != null ? player.getCurrentPosition() : 0;
+    }
+
+    /**
+     * This method is used to check either player is init, and can process subtitles on the basis of
+     * current status of player
+     */
+    public boolean canProcessSubtitles() {
+        return player != null && (player.isPlaying() || player.isPaused());
+    }
+
+    /**
+     * This method is used to update the CC data when a transcript is selected
+     */
+    public void updateClosedCaptionData(Caption subtitle) {
+        setClosedCaptionData(closedCaptionsEnabled ? subtitle : null);
+    }
+
+    /**
+     * This method is used to display CC data when a transcript is selected
+     */
+    public void showClosedCaptionData(TimedTextObject subtitles) {
+        this.subtitlesObj = subtitles;
+        resetClosedCaptioning();
+        if (subtitlesObj != null) {
+            closedCaptionsEnabled = true;
+            if (player != null) {
+                environment.getAnalyticsRegistry().trackShowTranscript(videoEntry.videoId,
+                        player.getCurrentPosition() / AppConstants.MILLISECONDS_PER_SECOND,
+                        videoEntry.eid, videoEntry.lmsUrl);
+            }
+        }
+        if(transcriptListener!=null){
+            transcriptListener.updateTranscriptCallbackStatus(true);
+        }
     }
 }

@@ -11,23 +11,17 @@ import com.google.android.youtube.player.YouTubeInitializationResult;
 import com.google.android.youtube.player.YouTubePlayer;
 import com.google.android.youtube.player.YouTubePlayer.Provider;
 import com.google.android.youtube.player.YouTubePlayerSupportFragment;
-import com.google.inject.Inject;
 
 import org.edx.mobile.R;
 import org.edx.mobile.base.BaseFragmentActivity;
 import org.edx.mobile.event.NetworkConnectivityChangeEvent;
-import org.edx.mobile.model.api.TranscriptModel;
 import org.edx.mobile.model.course.VideoBlockModel;
 import org.edx.mobile.model.db.DownloadEntry;
 import org.edx.mobile.module.analytics.Analytics;
 import org.edx.mobile.module.db.impl.DatabaseFactory;
-import org.edx.mobile.player.TranscriptManager;
 import org.edx.mobile.util.AppConstants;
-import org.edx.mobile.util.LocaleUtils;
 import org.edx.mobile.util.NetworkUtil;
 import org.edx.mobile.util.VideoUtil;
-
-import java.util.Collection;
 
 import de.greenrobot.event.EventBus;
 import subtitleFile.Caption;
@@ -35,46 +29,16 @@ import subtitleFile.TimedTextObject;
 
 public class CourseUnitYoutubePlayerFragment extends BaseCourseUnitVideoFragment implements YouTubePlayer.OnInitializedListener {
 
-    private static final int SUBTITLES_DISPLAY_DELAY_MS = 50;
     private YouTubePlayer youTubePlayer;
-    private Handler subtitleDisplayHandler = new Handler();
     private Handler initializeHandler = new Handler();
-    private TimedTextObject subtitlesObj;
     private YouTubePlayerSupportFragment youTubePlayerFragment;
-    @Inject
-    private TranscriptManager transcriptManager;
+
     /**
      * isInForeground is set on false when the app comes to background from foreground
      * so this allow to play a video when the app comes to foreground from background
      */
     private boolean isInForeground = true;
     private int attempts;
-
-    private Runnable subtitlesProcessorRunnable = () -> {
-        if (youTubePlayer != null) {
-            int currentPos = youTubePlayer.getCurrentTimeMillis();
-            if (currentPos >= 0 && youTubePlayer.isPlaying()) {
-                saveCurrentPlaybackPosition(currentPos);
-            } else {
-                currentPos = 0;
-            }
-
-            if (subtitlesObj != null) {
-                final Collection<Caption> subtitles = subtitlesObj.captions.values();
-                int currentSubtitleIndex = 0;
-                for (Caption subtitle : subtitles) {
-                    final int startMillis = subtitle.start.getMseconds();
-                    final int endMillis = subtitle.end.getMseconds();
-                    if (currentPos >= startMillis && currentPos <= endMillis) {
-                        updateSelection(currentSubtitleIndex);
-                        break;
-                    }
-                    currentSubtitleIndex++;
-                }
-            }
-        }
-        subtitleDisplayHandler.postDelayed(this.subtitlesProcessorRunnable, SUBTITLES_DISPLAY_DELAY_MS);
-    };
 
     /**
      * Create a new instance of fragment
@@ -116,7 +80,6 @@ public class CourseUnitYoutubePlayerFragment extends BaseCourseUnitVideoFragment
             }
         } else {
             releaseYoutubePlayer();
-            subtitleDisplayHandler.removeCallbacks(subtitlesProcessorRunnable);
             initializeHandler.removeCallbacks(null);
             EventBus.getDefault().unregister(this);
         }
@@ -124,8 +87,9 @@ public class CourseUnitYoutubePlayerFragment extends BaseCourseUnitVideoFragment
 
     public void initializeYoutubePlayer() {
         try {
-            if (getUserVisibleHint() && youTubePlayerFragment != null && NetworkUtil.verifyDownloadPossible((BaseFragmentActivity) getActivity())) {
-                loadTranscriptsData();
+            if (getUserVisibleHint() && getActivity() != null && youTubePlayerFragment != null &&
+                    NetworkUtil.verifyDownloadPossible((BaseFragmentActivity) getActivity())) {
+                downloadTranscript();
                 String apiKey = environment.getConfig().getYoutubeInAppPlayerConfig().getApiKey();
                 if (apiKey == null || apiKey.isEmpty()) {
                     logger.error(new Throwable("YOUTUBE_VIDEO:API_KEY is missing or empty"));
@@ -139,9 +103,13 @@ public class CourseUnitYoutubePlayerFragment extends BaseCourseUnitVideoFragment
     }
 
     @Override
-    public void onStop() {
-        super.onStop();
-        isInForeground = false;
+    protected boolean canProcessSubtitles() {
+        return youTubePlayer != null && youTubePlayer.isPlaying();
+    }
+
+    @Override
+    protected long getPlayerCurrentPosition() {
+        return youTubePlayer == null ? 0 : youTubePlayer.getCurrentTimeMillis();
     }
 
     @Override
@@ -151,11 +119,17 @@ public class CourseUnitYoutubePlayerFragment extends BaseCourseUnitVideoFragment
         }
     }
 
+    protected void updateClosedCaptionData(Caption caption) {
+    }
+
     @Override
-    public void onDestroy() {
-        super.onDestroy();
-        transcriptManager.cancelTranscriptDownloading();
-        subtitleDisplayHandler.removeCallbacks(subtitlesProcessorRunnable);
+    protected void showClosedCaptionData(TimedTextObject subtitles) {
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        isInForeground = false;
     }
 
     @Override
@@ -191,24 +165,6 @@ public class CourseUnitYoutubePlayerFragment extends BaseCourseUnitVideoFragment
     @Override
     public void onInitializationFailure(YouTubePlayer.Provider provider,
                                         YouTubeInitializationResult result) {
-    }
-
-    private void loadTranscriptsData() {
-        TranscriptModel transcript = getTranscriptModel();
-        String transcriptUrl = LocaleUtils.getTranscriptURL(getActivity(), transcript);
-        transcriptManager.downloadTranscriptsForVideo(transcriptUrl, (TimedTextObject transcriptTimedTextObject) -> {
-            subtitlesObj = transcriptTimedTextObject;
-            if (!getActivity().isDestroyed()) {
-                initTranscripts();
-            }
-        });
-    }
-
-    private void initTranscripts() {
-        if (subtitlesObj != null) {
-            initTranscriptListView();
-            updateTranscript(subtitlesObj);
-        }
     }
 
     private void releaseYoutubePlayer() {
@@ -290,7 +246,7 @@ public class CourseUnitYoutubePlayerFragment extends BaseCourseUnitVideoFragment
 
         @Override
         public void onPlaying() {
-            subtitleDisplayHandler.post(subtitlesProcessorRunnable);
+            updateTranscriptCallbackStatus(true);
             environment.getAnalyticsRegistry().trackVideoPlaying(videoModel.videoId,
                     youTubePlayer.getCurrentTimeMillis() / AppConstants.MILLISECONDS_PER_SECOND,
                     videoModel.eid, videoModel.lmsUrl, Analytics.Values.YOUTUBE);
@@ -298,7 +254,7 @@ public class CourseUnitYoutubePlayerFragment extends BaseCourseUnitVideoFragment
 
         @Override
         public void onPaused() {
-            subtitleDisplayHandler.removeCallbacks(subtitlesProcessorRunnable);
+            updateTranscriptCallbackStatus(false);
             environment.getAnalyticsRegistry().trackVideoPause(videoModel.videoId,
                     youTubePlayer.getCurrentTimeMillis() / AppConstants.MILLISECONDS_PER_SECOND,
                     videoModel.eid, videoModel.lmsUrl, Analytics.Values.YOUTUBE);
