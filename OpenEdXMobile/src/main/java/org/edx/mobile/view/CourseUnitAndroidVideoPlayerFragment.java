@@ -24,6 +24,7 @@ import org.edx.mobile.util.NetworkUtil;
 import org.edx.mobile.view.dialog.IDialogCallback;
 
 import subtitleFile.Caption;
+import subtitleFile.TimedTextObject;
 
 public class CourseUnitAndroidVideoPlayerFragment extends CourseUnitVideoFragment {
 
@@ -328,6 +329,36 @@ public class CourseUnitAndroidVideoPlayerFragment extends CourseUnitVideoFragmen
             playerContainer.requestLayout();
         }
         updateUI(orientation);
+    }
+
+    @Override
+    protected boolean canProcessSubtitles() {
+        if (playerFragment != null) {
+            return playerFragment.canProcessSubtitles();
+        }
+        return false;
+    }
+
+    @Override
+    protected long getPlayerCurrentPosition() {
+        if (playerFragment != null) {
+            return playerFragment.getCurrentPosition();
+        }
+        return 0;
+    }
+
+    @Override
+    protected void updateClosedCaptionData(Caption caption) {
+        if (playerFragment != null) {
+            playerFragment.updateClosedCaptionData(caption);
+        }
+    }
+
+    @Override
+    protected void showClosedCaptionData(TimedTextObject subtitles) {
+        if(playerFragment!=null){
+            playerFragment.showClosedCaptionData(subtitles);
+        }
     }
 
     @Override

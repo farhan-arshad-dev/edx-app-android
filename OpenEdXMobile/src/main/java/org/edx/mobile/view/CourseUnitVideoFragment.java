@@ -2,6 +2,7 @@ package org.edx.mobile.view;
 
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -21,12 +22,16 @@ import org.edx.mobile.model.course.VideoBlockModel;
 import org.edx.mobile.model.db.DownloadEntry;
 import org.edx.mobile.module.db.DataCallback;
 import org.edx.mobile.module.db.impl.DatabaseFactory;
+import org.edx.mobile.module.prefs.LoginPrefs;
 import org.edx.mobile.player.IPlayerEventCallback;
 import org.edx.mobile.player.TranscriptListener;
+import org.edx.mobile.player.TranscriptManager;
+import org.edx.mobile.util.LocaleUtils;
 import org.edx.mobile.view.adapters.TranscriptAdapter;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -37,15 +42,41 @@ public abstract class CourseUnitVideoFragment extends CourseUnitFragment
         implements IPlayerEventCallback, TranscriptListener {
 
     protected abstract void seekToCaption(Caption caption);
+
     protected abstract void updateUIForOrientation();
+
+    /**
+     * This method is used to check either player is init, and can process subtitles on the basis of
+     * current status of player.
+     */
+    protected abstract boolean canProcessSubtitles();
+
+    /**
+     * This method used to get the current position of the media player.
+     */
+    protected abstract long getPlayerCurrentPosition();
+
+    /**
+     * This method used to update the close caption in player screen.
+     */
+    protected abstract void updateClosedCaptionData(Caption caption);
+
+    /**
+     * This method send the downloaded transcript to the player screen.
+     */
+    protected abstract void showClosedCaptionData(TimedTextObject subtitles);
 
     protected final static Logger logger = new Logger(CourseUnitVideoFragment.class.getName());
     protected final static String HAS_NEXT_UNIT_ID = "has_next_unit";
     protected final static String HAS_PREV_UNIT_ID = "has_prev_unit";
     private final static int UNFREEZE_AUTOSCROLL_DELAY_MS = 3500;
+    private static final int SUBTITLES_DISPLAY_DELAY_MS = 100;
+
     protected DownloadEntry videoModel;
 
     VideoBlockModel unit;
+    private TimedTextObject subtitlesObj;
+
     protected ListView transcriptListView;
     protected TranscriptAdapter transcriptAdapter;
 
@@ -61,8 +92,44 @@ public abstract class CourseUnitVideoFragment extends CourseUnitFragment
     private float topOffset = 0;
 
     @Inject
+    LoginPrefs loginPrefs;
+    @Inject
     private CourseAPI courseApi;
+    @Inject
+    private TranscriptManager transcriptManager;
+
     private ViewTreeObserver.OnGlobalLayoutListener transcriptListLayoutListener;
+
+    private Handler subtitleDisplayHandler = new Handler();
+
+    /**
+     * This runnable handles the displaying of
+     * Subtitles on the screen per 100 mili seconds
+     */
+    private Runnable subtitlesProcessorRunnable = () -> {
+        if (canProcessSubtitles()) {
+            long currentPos = getPlayerCurrentPosition();
+            if (subtitlesObj != null) {
+                Collection<Caption> subtitles = subtitlesObj.captions.values();
+                int currentSubtitleIndex = 0;
+                for (Caption subtitle : subtitles) {
+                    int startMillis = subtitle.start.getMseconds();
+                    int endMillis = subtitle.end.getMseconds();
+                    if (currentPos >= startMillis && currentPos <= endMillis) {
+                        updateClosedCaptionData(subtitle);
+                        updateSelection(currentSubtitleIndex);
+                        break;
+                    } else if (currentPos > endMillis) {
+                        updateClosedCaptionData(null);
+                    }
+                    currentSubtitleIndex++;
+                }
+            } else {
+                updateClosedCaptionData(null);
+            }
+        }
+        subtitleDisplayHandler.postDelayed(this.subtitlesProcessorRunnable, SUBTITLES_DISPLAY_DELAY_MS);
+    };
 
     public static Bundle getCourseUnitBundle(VideoBlockModel unit, boolean hasNextUnit, boolean hasPreviousUnit) {
         Bundle args = new Bundle();
@@ -109,6 +176,50 @@ public abstract class CourseUnitVideoFragment extends CourseUnitFragment
         restore(savedInstanceState);
     }
 
+    @Override
+    public void setUserVisibleHint(boolean isVisibleToUser) {
+        super.setUserVisibleHint(isVisibleToUser);
+        if (!isVisibleToUser && unit == null) {
+            updateTranscriptCallbackStatus(false);
+        }
+    }
+
+    @Override
+    public void downloadTranscript() {
+        TranscriptModel transcript = getTranscriptModel();
+        String transcriptUrl = LocaleUtils.getTranscriptURL(getActivity(), transcript);
+        transcriptManager.downloadTranscriptsForVideo(transcriptUrl, (TimedTextObject transcriptTimedTextObject) -> {
+            subtitlesObj = transcriptTimedTextObject;
+            if (!getActivity().isDestroyed()) {
+                initTranscripts();
+            }
+        });
+    }
+
+    @Override
+    public void updateTranscriptCallbackStatus(boolean attach) {
+        if (subtitleDisplayHandler != null) {
+            if (attach) {
+                subtitleDisplayHandler.post(subtitlesProcessorRunnable);
+            } else {
+                subtitleDisplayHandler.removeCallbacks(subtitlesProcessorRunnable);
+            }
+        }
+    }
+
+    private void initTranscripts() {
+        if (subtitlesObj != null) {
+            initTranscriptListView();
+            updateTranscript(subtitlesObj);
+            String subtitleLanguage = LocaleUtils.getCurrentDeviceLanguage(getActivity());
+            if (!android.text.TextUtils.isEmpty(subtitleLanguage) &&
+                    getTranscriptModel().entrySet().contains(subtitleLanguage)) {
+                loginPrefs.setSubtitleLanguage(subtitleLanguage);
+            }
+            showClosedCaptionData(subtitlesObj);
+        }
+    }
+
     protected TranscriptModel getTranscriptModel() {
         TranscriptModel transcript = null;
         if (unit != null && unit.getData() != null &&
@@ -122,6 +233,13 @@ public abstract class CourseUnitVideoFragment extends CourseUnitFragment
     public void onStop() {
         super.onStop();
         transcriptListView.getViewTreeObserver().removeOnGlobalLayoutListener(transcriptListLayoutListener);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        transcriptManager.cancelTranscriptDownloading();
+        updateTranscriptCallbackStatus(false);
     }
 
     @Override
@@ -303,24 +421,21 @@ public abstract class CourseUnitVideoFragment extends CourseUnitFragment
         transcriptAdapter = new TranscriptAdapter(getContext(), environment);
         transcriptListView.setAdapter(transcriptAdapter);
 
-        transcriptListView.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                    case MotionEvent.ACTION_MOVE: {
-                        isTranscriptScrolling = true;
-                        break;
-                    }
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL: {
-                        transcriptListView.removeCallbacks(UNFREEZE_AUTO_SCROLL);
-                        transcriptListView.postDelayed(UNFREEZE_AUTO_SCROLL, UNFREEZE_AUTOSCROLL_DELAY_MS);
-                        break;
-                    }
+        transcriptListView.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_MOVE: {
+                    isTranscriptScrolling = true;
+                    break;
                 }
-                return false;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL: {
+                    transcriptListView.removeCallbacks(UNFREEZE_AUTO_SCROLL);
+                    transcriptListView.postDelayed(UNFREEZE_AUTO_SCROLL, UNFREEZE_AUTOSCROLL_DELAY_MS);
+                    break;
+                }
             }
+            return false;
         });
 
         transcriptListView.setOnItemClickListener((parent, view, position, id) -> {
@@ -341,12 +456,7 @@ public abstract class CourseUnitVideoFragment extends CourseUnitFragment
      * Re-enables our auto scrolling logic of transcript listview with respect to video's current
      * playback position.
      */
-    final Runnable UNFREEZE_AUTO_SCROLL = new Runnable() {
-        @Override
-        public void run() {
-            isTranscriptScrolling = false;
-        }
-    };
+    final Runnable UNFREEZE_AUTO_SCROLL = () -> isTranscriptScrolling = false;
 
     public void updateBottomSectionVisibility(int visibility) {
         if (transcriptListView != null && transcriptAdapter != null) {
