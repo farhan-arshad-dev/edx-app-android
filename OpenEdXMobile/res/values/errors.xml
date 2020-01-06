@@ -47,10 +47,14 @@
     <string name="error_account_not_linked_desc_fb_2" tools:ignore="MissingTranslation">This Facebook account is not linked with any {platform_name} account. Please register.</string>
     <!-- Title of alert shown during login when user attempts login via Google without having linked their account -->
     <string name="error_account_not_linked_title_google" tools:ignore="MissingTranslation">Google account not associated with {platform_name} account</string>
+    <!-- Title of alert shown during login when user attempts login via Google without having linked their account -->
+    <string name="error_account_not_linked_title_microsoft" tools:ignore="MissingTranslation">Microsoft account not associated with {platform_name} account</string>
     <!-- Content of alert shown during login when user attempts login via Google without having linked their account -->
     <string name="error_account_not_linked_desc_google" tools:ignore="MissingTranslation">Make sure your Google account is associated with your {platform_name} account on {platform_destination}</string>
     <!-- Content of alert shown during login when user attempts login via Google without having linked their account -->
     <string name="error_account_not_linked_desc_google_2" tools:ignore="MissingTranslation">This Google account is not linked with any {platform_name} account. Please register.</string>
+    <!-- Content of alert shown during login when user attempts login via Microsoft without having linked their account -->
+    <string name="error_account_not_linked_desc_microsoft_2" tools:ignore="MissingTranslation">This Microsoft account is not linked with any {platform_name} account. Please register.</string>
 
     <!-- Download error messages -->
     <!-- Label shown on video list item whose download failed -->

@@ -52,6 +52,7 @@ public class Config {
     private static final String PROGRAM = "PROGRAM";
     private static final String ZERO_RATING = "ZERO_RATING";
     private static final String FACEBOOK = "FACEBOOK";
+    private static final String MICROSOFT = "MICROSOFT";
     private static final String GOOGLE = "GOOGLE";
     private static final String TWITTER = "TWITTER";
     private static final String FABRIC = "FABRIC";
@@ -347,6 +348,18 @@ public class Config {
         }
 
         public GoogleConfig() {
+        }
+
+        public boolean isEnabled() {
+            return mEnabled;
+        }
+    }
+
+    public static class MicrosoftConfig {
+        @SerializedName("ENABLED")
+        private boolean mEnabled;
+
+        public MicrosoftConfig() {
         }
 
         public boolean isEnabled() {
@@ -822,6 +835,11 @@ public class Config {
     @NonNull
     public GoogleConfig getGoogleConfig() {
         return getObjectOrNewInstance(GOOGLE, GoogleConfig.class);
+    }
+
+    @NonNull
+    public MicrosoftConfig getMicrosoftConfig() {
+        return getObjectOrNewInstance(MICROSOFT, MicrosoftConfig.class);
     }
 
     @NonNull
