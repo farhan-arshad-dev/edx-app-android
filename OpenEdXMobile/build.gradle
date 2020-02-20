@@ -44,6 +44,60 @@ class AndroidHelper {
         jsonWriter.withWriter {
             builder.writeTo(it)
         }
+        saveGoogleServiceJson(project, config.get('FIREBASE'))
+    }
+
+    static def saveGoogleServiceJson(project, firebaseConfig) {
+        def jsonBuilder = new JsonBuilder()
+        println(new JsonBuilder(firebaseConfig))
+
+        jsonBuilder {
+            project_info {
+                project_number firebaseConfig.get('PROJECT_NUMBER')
+                firebase_url "https://" + firebaseConfig.get("PROJECT_ID") + ".firebaseio.com"
+                project_id firebaseConfig.get("PROJECT_ID")
+                storage_bucket firebaseConfig.get("PROJECT_ID") + ".appspot.com"
+            }
+            client([{
+                        'client_info' {
+                            'mobilesdk_app_id' "1:" + firebaseConfig.get('PROJECT_NUMBER') + ":android:c04089bb49270266"
+                            'android_client_info' {
+                                'package_name' 'org.edx.mobile'
+                            }
+                        }
+                        oauth_client([
+                                {
+                                    'client_id' firebaseConfig.get('oauth_client_id')
+                                    'client_type' 3
+                                }
+                        ])
+                        api_key(
+                                [{
+                                     'current_key' firebaseConfig.get('CURRENT_KEY')
+                                 }])
+                        'services' {
+                            'appinvite_service' {
+                                other_platform_oauth_client([{
+                                                                 'client_id' firebaseConfig.get('oauth_client_id')
+                                                                         'client_type' 3
+                                                             }, {
+                                    'client_id' firebaseConfig.get('other_platform_oauth_client')
+                                    'client_type' 2
+                                    'ios_info' {
+                                        bundle_id 'org.edx.mobile'
+                                        app_store_id firebaseConfig.get('APP_STORE_ID')
+                                    }
+                                }
+                                ])
+                            }
+                        }
+                    }])
+            configuration_version '1'
+        }
+        def googleServiceJsonPath = project.projectDir.toString() + "/google-services.json"
+        new FileWriter(googleServiceJsonPath).withWriter {
+            jsonBuilder.writeTo(it)
+        }
     }
 }
 
