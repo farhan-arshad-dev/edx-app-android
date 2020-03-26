@@ -269,7 +269,8 @@ public class SocialLoginDelegate {
             descParamsDesc.put("platform_name", environment.getConfig().getPlatformName());
             descParamsDesc.put("platform_destination", environment.getConfig().getPlatformDestinationName());
             final CharSequence desc = ResourceUtil.getFormattedString(context.getResources(),
-                    isFacebook ? R.string.error_account_not_linked_desc_fb : R.string.error_account_not_linked_desc_google,
+                    isFacebook ? R.string.error_account_not_linked_desc_fb :
+                            isMicrosoft ? R.string.error_account_not_linked_desc_microsoft : R.string.error_account_not_linked_desc_google,
                     descParamsDesc);
             return new LoginErrorMessage(title.toString(), desc.toString());
         }
