@@ -4,6 +4,8 @@ import android.annotation.TargetApi;
 import android.os.Build;
 import android.os.Bundle;
 import androidx.annotation.NonNull;
+import androidx.core.view.ViewCompat;
+
 import android.view.View;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -82,6 +84,10 @@ public abstract class BaseWebViewFragment extends OfflineSupportBaseFragment
     }
 
     private void initWebView() {
+        // To make the smooth scrolling of view within viewpager2
+        // Inspiration: https://stackoverflow.com/a/35198484
+        ViewCompat.setNestedScrollingEnabled(webView, true);
+
         client = new URLInterceptorWebViewClient(getActivity(), webView);
 
         // if all the links are to be treated as external
