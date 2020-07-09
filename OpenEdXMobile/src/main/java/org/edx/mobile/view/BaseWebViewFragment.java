@@ -84,10 +84,6 @@ public abstract class BaseWebViewFragment extends OfflineSupportBaseFragment
     }
 
     private void initWebView() {
-        // To make the smooth scrolling of view within viewpager2
-        // Inspiration: https://stackoverflow.com/a/35198484
-        ViewCompat.setNestedScrollingEnabled(webView, true);
-
         client = new URLInterceptorWebViewClient(getActivity(), webView);
 
         // if all the links are to be treated as external

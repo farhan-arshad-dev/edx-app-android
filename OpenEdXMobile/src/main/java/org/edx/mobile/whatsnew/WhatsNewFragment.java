@@ -28,7 +28,6 @@ import org.edx.mobile.util.FileUtil;
 import org.edx.mobile.util.ResourceUtil;
 import org.edx.mobile.util.WhatsNewUtil;
 import org.edx.mobile.view.custom.IndicatorController;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -159,7 +158,7 @@ public class WhatsNewFragment extends BaseFragment {
             this.list = list;
         }
 
-        @NotNull
+        @NonNull
         @Override
         public Fragment createFragment(int position) {
             return WhatsNewItemFragment.newInstance(list.get(position));

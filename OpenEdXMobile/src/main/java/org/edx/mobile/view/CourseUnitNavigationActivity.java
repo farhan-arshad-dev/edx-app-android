@@ -71,9 +71,6 @@ public class CourseUnitNavigationActivity extends CourseBaseActivity implements
                 unitList, courseData, courseUpgradeData, this);
         pager2.setAdapter(pagerAdapter);
         pager2.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
-
-            private boolean firstPageLoad = true;
-
             @Override
             public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
                 invalidateOptionsMenu();
