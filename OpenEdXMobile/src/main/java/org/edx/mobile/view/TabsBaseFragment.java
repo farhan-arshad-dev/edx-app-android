@@ -195,7 +195,7 @@ public abstract class TabsBaseFragment extends BaseFragment {
         });
     }
 
-    protected void createTab(TabLayout.Tab tab, FragmentItemModel fragmentItem) {
+    protected void createTab(@NonNull TabLayout.Tab tab, @NonNull FragmentItemModel fragmentItem) {
         final IconDrawable iconDrawable = new IconDrawable(getContext(), fragmentItem.getIcon());
         iconDrawable.colorRes(getContext(), TAB_COLOR_SELECTOR_RES);
         if (showTitleInTabs()) {

@@ -4,7 +4,6 @@ import android.annotation.TargetApi;
 import android.os.Build;
 import android.os.Bundle;
 import androidx.annotation.NonNull;
-import androidx.core.view.ViewCompat;
 
 import android.view.View;
 import android.webkit.WebResourceRequest;
