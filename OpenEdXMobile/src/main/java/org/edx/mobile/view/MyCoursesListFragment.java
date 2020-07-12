@@ -104,9 +104,6 @@ public class MyCoursesListFragment extends OfflineSupportBaseFragment
         binding.myCourseList.addHeaderView(new View(getContext()), null, false);
         binding.myCourseList.setAdapter(adapter);
         binding.myCourseList.setOnItemClickListener(adapter);
-        // To make the smooth scrolling of list within viewpager2
-        // Inspiration: https://stackoverflow.com/a/35198484
-        ViewCompat.setNestedScrollingEnabled(binding.myCourseList, true);
         return binding.getRoot();
     }
 

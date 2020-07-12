@@ -173,9 +173,6 @@ public class CourseOutlineFragment extends OfflineSupportBaseFragment
             }
         });
         UiUtil.setSwipeRefreshLayoutColors(swipeContainer);
-        // To make the smooth scrolling of list within viewpager2
-        // Inspiration: https://stackoverflow.com/a/35198484
-        ViewCompat.setNestedScrollingEnabled(listView, true);
         restore(bundle);
         initListView(view);
         fetchCourseComponent();

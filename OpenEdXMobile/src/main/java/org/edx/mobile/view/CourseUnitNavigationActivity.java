@@ -22,6 +22,7 @@ import org.edx.mobile.model.course.BlockType;
 import org.edx.mobile.model.course.CourseComponent;
 import org.edx.mobile.module.analytics.Analytics;
 import org.edx.mobile.services.LastAccessManager;
+import org.edx.mobile.util.UiUtil;
 import org.edx.mobile.view.adapters.CourseUnitPagerAdapter;
 import org.edx.mobile.view.custom.PreLoadingListener;
 
@@ -87,6 +88,8 @@ public class CourseUnitNavigationActivity extends CourseBaseActivity implements
                 }
             }
         });
+        // Enforce to intercept single scrolling direction
+        UiUtil.enforceSingleScrollDirection(pager2);
         findViewById(R.id.course_unit_nav_bar).setVisibility(View.VISIBLE);
 
         mPreviousBtn.setOnClickListener(view -> navigatePreviousComponent());
